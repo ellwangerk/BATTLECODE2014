@@ -1,0 +1,78 @@
+package dayton;
+
+import battlecode.common.*;
+
+public class Pathing {
+	
+	public static final Direction[] MOVE_DIRECTIONS = {Direction.NORTH,Direction.NORTH_EAST,Direction.EAST,Direction.SOUTH_EAST,Direction.SOUTH,Direction.SOUTH_WEST,Direction.WEST,Direction.NORTH_WEST};
+	public static final Direction[] CARDINAL_DIRECTIONS = {Direction.NORTH,Direction.WEST,Direction.SOUTH,Direction.EAST};
+	
+	public static void moveTo(RobotController rc, MapLocation destination) throws GameActionException {
+		while(!rc.getLocation().equals(destination)) {
+			rc.setIndicatorString(0,"Normal");
+			MapLocation loc = rc.getLocation();
+			Direction toLocation = loc.directionTo(destination);
+			if(rc.canMove(toLocation)) {
+				executeMove(rc,toLocation);
+			} else {
+				bug(rc,destination,loc.add(toLocation));
+			}
+		}
+	}
+	
+	private static void executeMove(RobotController rc, Direction dir) throws GameActionException {
+		while(!rc.isActive()) {
+			rc.yield();
+		}
+		if(rc.canMove(dir)) {
+			rc.move(dir);
+		}
+	}
+	
+	public static void bug(RobotController rc, MapLocation destination, MapLocation companion) throws GameActionException {
+		int loops = 0;
+		while(true) {
+			rc.setIndicatorString(0,"Bugging");
+			MapLocation currentLoc = rc.getLocation();
+			for(Direction dir : MOVE_DIRECTIONS) {
+				//System.out.println(loops + " Looking for companion...");
+				MapLocation newCompanion = getCompanion(rc,currentLoc,companion,dir);
+				if(newCompanion != null) {
+					companion = newCompanion;
+					rc.setIndicatorString(1,loops + ": Trying to Move: " + dir);
+					System.out.println(loops + " - found companion");
+					executeMove(rc,dir);
+					break;
+				}
+			}
+			loops++;
+		}
+	}
+
+	private static MapLocation getCompanion(RobotController rc, MapLocation loc, MapLocation companion, Direction proposedMoveDir) {
+		MapLocation proposedLoc = loc.add(proposedMoveDir);
+		if(rc.senseTerrainTile(proposedLoc) == TerrainTile.NORMAL || rc.senseTerrainTile(proposedLoc) == TerrainTile.ROAD) {
+			for(Direction companionDirection : CARDINAL_DIRECTIONS) {
+				MapLocation proposedCompanion = proposedLoc.add(companionDirection);
+				//Companion must be a barrier
+				if(rc.senseTerrainTile(proposedCompanion).equals(TerrainTile.VOID) || 
+						rc.senseTerrainTile(proposedCompanion).equals(TerrainTile.OFF_MAP)) {
+					//To ensure they are part of the same structure. isAdjacentTo() does not include the possibility that 
+					//they are the same tile, which could be the case.
+					//if(proposedCompanion.isAdjacentTo(companion) || proposedCompanion.equals(companion)) {
+					if(proposedCompanion.distanceSquaredTo(companion) < 10) {
+						//Right is a 90 degree CW rotation (+ 2*45) from forward direction. Forward direction = move direction.
+						Direction right = MOVE_DIRECTIONS[(proposedMoveDir.ordinal() + 2) % 8];
+						Direction toCompanion = proposedLoc.directionTo(proposedCompanion);
+						//Make sure wall stays on the right
+						if((right.ordinal() == toCompanion.ordinal()) || (((right.ordinal() + 1) % 8) == toCompanion.ordinal())
+								|| (((right.ordinal() - 1) % 8) == toCompanion.ordinal())){
+							return proposedCompanion;
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+}
