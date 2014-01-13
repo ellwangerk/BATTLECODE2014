@@ -1,0 +1,16 @@
+private static MapLocation findMostCows(MapLocation loc, int maxDistanceSquared) {
+        	double[][] cowGrowth = rc.senseCowGrowth();
+        	MapLocation mostCows = new MapLocation(0,0);
+        	double mostGrowth = -1;
+        	for(int x = 0; x < cowGrowth.length; x++) {
+        		for(int y = 0; y < cowGrowth[0].length; y++) {
+        			MapLocation currentLoc = new MapLocation(x,y);
+        			if(loc.distanceSquaredTo(currentLoc) <= maxDistanceSquared) {
+        				if(cowGrowth[x][y] > mostGrowth) {
+        					mostCows = currentLoc;
+        				}
+        			}
+        		}
+        	}
+        	return mostCows;
+        }
