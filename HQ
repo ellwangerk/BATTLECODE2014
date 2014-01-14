@@ -1,0 +1,145 @@
+package kerry;
+
+import battlecode.common.Direction;
+import battlecode.common.MapLocation;
+import battlecode.common.Robot;
+import battlecode.common.RobotController;
+import battlecode.common.RobotInfo;
+
+public class HQ extends RobotBrain{
+	final static int STACK_START = 65535;
+	
+	public HQ(RobotController rc){
+		super(rc);
+		try{
+			rc.broadcast(SP, STACK_START);
+			rc.broadcast(ROBOT_COUNT, 0);
+			rc.broadcast(FIRST_PASTR_X, -1);
+		}
+		catch(Exception e){
+			reportError("error in initializing HQ");
+		}
+	}
+	
+	public void run(){
+		//hq takes 30+n^1.5 turns to spawn a new robot when n=robotNumber
+		//we can do a lot of calculations in the meen time
+		//MapLocation l = findBestPastr(100);
+		try{
+			Direction toEnemy = rc.getLocation().directionTo(rc.senseEnemyHQLocation());
+			if (rc.isActive() && rc.senseRobotCount() < 25) {
+				toEnemy = rc.getLocation().directionTo(rc.senseEnemyHQLocation());
+				if (rc.senseObjectAtLocation(rc.getLocation().add(toEnemy)) == null) {
+					rc.spawn(toEnemy);
+				}
+			}
+			MapLocation loc = findBestPastr(100);
+			rc.broadcast(FIRST_PASTR_X, loc.x);
+			rc.broadcast(FIRST_PASTR_Y, loc.y);
+		}catch (Exception e){reportError("error spawning first soldier");}
+		while (true){
+			try {
+				//Check if a robot is spawnable and spawn one if it is
+				if (rc.isActive() && rc.senseRobotCount() < 25) {
+					Direction toEnemy = rc.getLocation().directionTo(rc.senseEnemyHQLocation());
+					if (rc.senseObjectAtLocation(rc.getLocation().add(toEnemy)) == null) {
+						rc.spawn(toEnemy);
+					}
+				}
+				hqAttack();
+			}
+			catch (Exception e) {
+				reportError("HQ Exception");
+			}
+			rc.yield();
+		}
+	}
+	
+	public boolean hqAttack(){
+		//this method takes 326 byte codes to execute if no one is around
+		//426 byte codes to execute if one enemy is near
+		//577 if an enemy is near enough to attack
+		//this method has the hq attack a nearby enemy
+		//return true if it attacks
+		try{
+			Robot[] nearbyEnemies = rc.senseNearbyGameObjects(Robot.class,25,rc.getTeam().opponent());
+			if (nearbyEnemies.length == 0){
+				return false;
+			}
+			Robot[] nearbyAllies = rc.senseNearbyGameObjects(Robot.class,25,rc.getTeam());
+			rc.setIndicatorString(0, ""+nearbyEnemies.length);
+			MapLocation l = rc.getLocation();
+			int x = l.x;
+			int y = l.y;
+			RobotInfo[][] allies = new RobotInfo[11][11];
+			RobotInfo[][] enemies = new RobotInfo[11][11];
+			RobotInfo robotInfo;
+			for (Robot ally: nearbyAllies){
+				robotInfo = rc.senseRobotInfo(ally);
+				allies[robotInfo.location.x-x+5][robotInfo.location.y-y+5]=robotInfo; 
+			}
+			for (Robot enemy: nearbyEnemies){
+				rc.setIndicatorString(2, "debug1");
+				robotInfo = rc.senseRobotInfo(enemy);
+				enemies[robotInfo.location.x-x+5][robotInfo.location.y-y+5]=robotInfo;
+				rc.setIndicatorString(2, "debug2");
+			}
+			MapLocation toAttack;
+			double leastHealth = -1;
+			int leastCollateral = 26;
+			int leastDeath = 26;
+			int health;
+			int collateral;
+			int deathToll;
+			deathToll = 0;
+			collateral = 0;
+			toAttack = null;
+			for (Robot enemy : nearbyEnemies) {
+				robotInfo = rc.senseRobotInfo(enemy);
+				if (rc.canAttackSquare(robotInfo.location)) {
+					for (int i = robotInfo.location.x - 1; i <= robotInfo.location.x + 1; i++) {
+						for (int j = robotInfo.location.y - 1; i <= robotInfo.location.y + 1; i++) {
+							if (allies[i - x + 5][j - y + 5] != null) {
+								collateral++;
+								if (allies[i - x + 5][j - y + 5].health <= 25)
+									deathToll++;
+							} else if (enemies[i - x + 5][j - y + 5] != null
+									&& (i != 0 || j != 0)) {
+								collateral--;
+								if (enemies[i - x + 5][j - y + 5].health <= 25)
+									deathToll--;
+							}
+						}
+					}
+					if (robotInfo.health <= 50) {
+						deathToll--;
+					}
+					if (collateral <= 2) {
+						if (leastHealth == -1) {
+							toAttack = robotInfo.location;
+							leastHealth = robotInfo.health;
+							leastCollateral = collateral;
+							leastDeath = deathToll;
+						} else if (deathToll <= leastDeath
+								&& collateral < leastCollateral) {
+							toAttack = robotInfo.location;
+							leastHealth = robotInfo.health;
+							leastCollateral = collateral;
+							leastDeath = deathToll;
+						}
+					}
+				}
+			}
+			if (toAttack == null)
+				return false;
+			else{
+				rc.attackSquare(toAttack);
+				return true;
+			}
+		}
+		catch (Exception e){
+			reportError("error with hq attacking.");
+			return false;
+		}
+	}
+}
