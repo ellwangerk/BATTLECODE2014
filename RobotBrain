@@ -1,0 +1,81 @@
+package kerry;
+
+import battlecode.common.*;
+import java.util.*;
+
+public abstract class RobotBrain{
+	public static final Direction[] MOVE_DIRECTIONS = {Direction.NORTH,Direction.NORTH_EAST,Direction.EAST,Direction.SOUTH_EAST,Direction.SOUTH,Direction.SOUTH_WEST,Direction.WEST,Direction.NORTH_WEST};
+	//this is stuff used for optimizing where a pastr should go
+	public static final double  COW_GROWTH_WEIGHT = 20;
+	public static final double DIST_WEIGHT = 0;
+	public static final double HQ_VICINITY_WEIGHT = 200;
+	public static final double ENEMY_HQ_WEIGHT = 0.5;
+	//this is stuff for memory management
+	//channels are being used as memory addresses
+	public static final int SP = 0;
+	public static final int ROBOT_COUNT = 1;
+	public static final int ROBOT_DISTRESS = 2;
+	public static final int FIRST_PASTR_X = 3;
+	public static final int FIRST_PASTR_Y = 4;
+	public static final int ROBOT_OBJ_START = 100;
+	public static final int ROBOT_OBJ_SIZE = 3;
+	public static final int ROBOT_OBJ_X = +0;
+	public static final int ROBOT_OBJ_Y = +1;
+	public static final int ROBOT_HEALTH = +2;
+	
+	int robotNumber;
+	Random rand;
+	RobotController rc;
+	MapLocation HQLocation,enemyHQLocation;
+	public RobotBrain(RobotController rc){
+		this.rc = rc;
+		rand = new Random();
+		HQLocation = rc.senseHQLocation();
+		enemyHQLocation = rc.senseEnemyHQLocation();
+	}
+	public abstract void run();
+	public void reportError(String s){
+		System.out.println(s);
+	}
+	public MapLocation findBestPastr(int maxDistanceSquared) {
+		int dist = (int)Math.sqrt(maxDistanceSquared);
+		MapLocation loc = rc.getLocation();
+		  double[][] cowGrowth = rc.senseCowGrowth();
+		  MapLocation bestLocation = new MapLocation(0,0);
+		  double best = -1;
+		  int minX = loc.x-dist;
+		  int maxX = loc.x+dist;
+		  int minY = loc.y-dist;
+		  int maxY = loc.y+dist;
+		  if (minX<0) minX=0;
+		  if (maxX>cowGrowth.length) maxX = cowGrowth.length;
+		  if (minY<0) minY=0;
+		  if (maxY>cowGrowth[0].length) maxY = cowGrowth[0].length;
+		  for(int x = minX; x < maxX; x++) {
+		    for(int y = minY; y < maxY; y++) {
+		      MapLocation currentLoc = new MapLocation(x,y);
+		      if(loc.distanceSquaredTo(currentLoc) <= maxDistanceSquared) {
+		        if(weightedPastr(currentLoc,cowGrowth) > best) {
+		          bestLocation = currentLoc;
+		        }
+		      }
+		    }
+		  }
+		  return bestLocation;
+		}
+
+
+		private double weightedPastr(MapLocation loc, double[][] cowGrowth){
+		  //this requires enemyHQLocation and HQLocation to be variables of type MapLocation.
+		  //we should get this using rc.senseEnemyHQLocation and rc.senseHQLocation at the begining of run()
+		  /*	public static final int  COW_GROWTH_WEIGHT = 1;
+	public static final int DIST_WEIGHT = -1;
+	public static final int HQ_VICINITY_WEIGHT = 1;
+	public static final int ENEMY_HQ_DIST = 1;*/
+			double val= COW_GROWTH_WEIGHT*cowGrowth[loc.x][loc.y];
+			val+= DIST_WEIGHT*rc.getLocation().distanceSquaredTo(loc);
+			val+=(HQLocation.distanceSquaredTo(loc)<=15 ? HQ_VICINITY_WEIGHT : 0);
+			val+= ENEMY_HQ_WEIGHT*enemyHQLocation.distanceSquaredTo(loc);
+			return val;
+		}
+}
