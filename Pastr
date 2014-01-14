@@ -1,0 +1,17 @@
+package kerry;
+
+import battlecode.common.RobotController;
+import battlecode.common.RobotType;
+
+public class Pastr extends RobotBrain{
+	public Pastr(RobotController rc){
+		super(rc);
+	}
+	public void run(){
+		//we can probably do a lot of busy work here
+		//calculations need to get done and PASTRs don't have much else to do
+		while (true){
+			rc.yield();
+		}
+	}
+}
