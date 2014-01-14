@@ -1,0 +1,251 @@
+package kerry;
+
+import java.util.ArrayList;
+
+import battlecode.common.Direction;
+import battlecode.common.GameActionException;
+import battlecode.common.GameObject;
+import battlecode.common.MapLocation;
+import battlecode.common.Robot;
+import battlecode.common.RobotController;
+import battlecode.common.RobotInfo;
+import battlecode.common.RobotType;
+import battlecode.common.TerrainTile;
+
+public class Soldier extends RobotBrain{
+	public Soldier(RobotController rc){
+		super(rc);
+		try{
+			robotNumber = rc.readBroadcast(ROBOT_COUNT);
+			rc.broadcast(ROBOT_COUNT, robotNumber+1);
+		}catch (Exception e){reportError("error updating count");}
+	}
+	
+	public void run(){
+		if (robotNumber==0){
+			rc.setIndicatorString(0, "becoming a pastr");
+			makeFirstPastr();
+			return;
+		}
+		else if (robotNumber == 1){
+			rc.setIndicatorString(0, "becoming a noisetower");
+			makeFirstNoiseTower();
+			return;
+		}
+		else if (robotNumber<=3){
+			rc.setIndicatorString(0, "defending the pastr");
+			defendFirstPastr();
+			return;
+		}
+		while (true){
+			try {
+				if (rc.isActive()) {
+					int action = (rc.getRobot().getID()*rand.nextInt(101) + 50)%101;
+					if (action < 1 && rc.getLocation().distanceSquaredTo(rc.senseHQLocation()) > 2) {
+						//Construct a PASTR
+						rc.construct(RobotType.PASTR);
+					}
+					else if (action < 30) {
+						//Attack a random nearby enemy
+						if (!attackNearby()){
+							moveRandom();
+						}
+					}
+					else if (action < 80) {
+						//Move in a random direction
+						moveRandom();
+					}
+					else {
+						//Sneak towards the enemy
+						Direction toEnemy = rc.getLocation().directionTo(rc.senseEnemyHQLocation());
+						if (rc.canMove(toEnemy)) {
+							rc.sneak(toEnemy);
+						}
+					}
+				}
+			}
+			catch (Exception e) {
+				reportError("Soldier Exception");
+			}
+			rc.yield();
+		}
+	}
+	
+	public void makeFirstPastr(){
+		try {
+			while (rc.readBroadcast(FIRST_PASTR_X)==-1){
+				rc.yield();
+			}
+			int x = rc.readBroadcast(FIRST_PASTR_X);
+			int y = rc.readBroadcast(FIRST_PASTR_Y);
+			moveTo(new MapLocation(x,y),1);
+			while (!rc.isActive()){
+				rc.yield();
+			}
+			rc.construct(RobotType.PASTR);
+			//new Pastr(rc).run();
+			while (true) rc.yield();
+		}catch (Exception e){reportError("error making first PASTR");}
+	}
+
+	public void makeFirstNoiseTower(){
+		try {
+			int x = rc.readBroadcast(FIRST_PASTR_X);
+			int y = rc.readBroadcast(FIRST_PASTR_Y);
+			moveTo(new MapLocation(x,y),1);
+			while (!rc.isActive()){
+				rc.yield();
+			}
+			rc.construct(RobotType.NOISETOWER);
+			//new NoiseTower(rc).run();
+			while (true) rc.yield();
+		}catch (Exception e){reportError("error making first noise tower");}
+	}
+	
+	public void defendFirstPastr(){
+		try{
+			int x = rc.readBroadcast(FIRST_PASTR_X);
+			int y = rc.readBroadcast(FIRST_PASTR_Y);
+			moveTo(new MapLocation(x,y),25);
+			//TODO
+		}catch (Exception e){reportError("error defending first PASTR");}
+	}
+	
+	public void moveRandom(){
+		try{
+			Direction moveDirection = MOVE_DIRECTIONS[rand.nextInt(8)];
+			if (rc.canMove(moveDirection)) {
+				rc.sneak(moveDirection);
+			}
+		}
+		catch (Exception e){
+			reportError("error moving");
+		}
+	}
+	
+	public boolean attackNearby(){
+		try{
+			Robot[] nearbyEnemies = rc.senseNearbyGameObjects(Robot.class,10,rc.getTeam().opponent());
+			RobotInfo robotInfo;
+			if (nearbyEnemies.length == 0) {
+				return false;
+			}
+			for (Robot enemy: nearbyEnemies){
+				robotInfo = rc.senseRobotInfo(enemy);
+				if (rc.canAttackSquare(robotInfo.location)){
+					rc.attackSquare(robotInfo.location);
+					return true;
+				}
+			}
+		}
+		catch (Exception e){
+			reportError("error attacking");
+		}
+		return false;
+	}
+	
+    public void moveTo(MapLocation destination, int acceptableDistanceSquared) throws GameActionException {
+        while(rc.getLocation().distanceSquaredTo(destination) > acceptableDistanceSquared) {
+                MapLocation currentLoc = rc.getLocation();
+                Direction toLocation = currentLoc.directionTo(destination);
+                if(rc.canMove(toLocation)) {
+                        executeMove(toLocation);
+                } else {
+                        bug(destination,toLocation);
+                }
+        }
+}
+
+//To ensure the robot only tries to make one move at a time
+private boolean executeMove(Direction dir) throws GameActionException {
+        while(!rc.isActive()) {
+                rc.yield();
+        }
+        if(rc.canMove(dir)) {
+                rc.sneak(dir);
+                return true;
+        }
+        return false;
+}
+
+private void bug(MapLocation destination, Direction tryDirection) throws GameActionException {
+        MapLocation beginning = rc.getLocation();
+        MapLocation companion = beginning.add(tryDirection);
+        int initialDistance = beginning.distanceSquaredTo(destination);
+        MapLocation currentLoc = beginning;
+        ArrayList<MapLocation> triedCompanions = new ArrayList<MapLocation>();
+
+        //Bug until we get closer to the destination
+        while((currentLoc.distanceSquaredTo(destination)) >= initialDistance) {
+                currentLoc = rc.getLocation();
+                boolean foundMove = false;
+                triedCompanions.add(companion);
+                for(Direction dir : MOVE_DIRECTIONS) {
+                        if(rc.canMove(dir)) {
+                                MapLocation newCompanion = getCompanion(currentLoc,companion,dir);
+                                if(newCompanion != null) {
+                                        companion = newCompanion;
+                                        foundMove = executeMove(dir);
+                                        break;
+                                }
+                        }
+                }
+                if(foundMove) {
+                        triedCompanions.clear();
+                } else {
+                        //Cycles companion. Gets a new one. Maybe this one will work.
+                        MapLocation newCompanion = cycleCompanion(currentLoc,companion,triedCompanions);
+                        if(newCompanion != null) {
+                                companion = newCompanion;
+                        }
+                }
+        }
+}
+
+private MapLocation getCompanion(MapLocation loc, MapLocation companion, Direction proposedMoveDir) throws GameActionException {
+        MapLocation proposedLoc = loc.add(proposedMoveDir);
+        //Try to find a companion square
+        for(Direction companionDirection : MOVE_DIRECTIONS) {
+                MapLocation proposedCompanion = proposedLoc.add(companionDirection);
+                TerrainTile terrain = rc.senseTerrainTile(proposedCompanion);
+                GameObject occupant = rc.senseObjectAtLocation(proposedCompanion);
+                //Companion must be a barrier
+                if(terrain == TerrainTile.OFF_MAP || terrain == TerrainTile.VOID || occupant != null) {
+                        //To ensure they are part of the same structure. isAdjacentTo() does not include the possibility that
+                        //they are the same tile, which could be the case
+                        if(proposedCompanion.isAdjacentTo(companion) || proposedCompanion.equals(companion)) {
+                                //Right is a 90 degree CW rotation (+ 2*45) from forward direction. Forward direction = move direction
+                                Direction right = MOVE_DIRECTIONS[(proposedMoveDir.ordinal() + 2) % 8];
+                                Direction toCompanion = proposedLoc.directionTo(proposedCompanion);
+                                //Make sure wall stays on the right
+                                if((right.ordinal() == toCompanion.ordinal()) || (((right.ordinal() + 1) % 8) == toCompanion.ordinal())
+                                                || (((right.ordinal() - 1) % 8) == toCompanion.ordinal())){
+                                        return proposedCompanion;
+                                }
+                        }
+                }
+        }
+        return null;
+}
+
+private MapLocation cycleCompanion(MapLocation loc, MapLocation companion, ArrayList<MapLocation> triedCompanions) throws GameActionException {
+        MapLocation proposedLoc = loc;
+        //Try to find a companion square
+        for(Direction companionDirection : MOVE_DIRECTIONS) {
+                MapLocation proposedCompanion = proposedLoc.add(companionDirection);
+                //Must be a companion we have not previously had
+                if(!triedCompanions.contains(proposedCompanion)) {
+                        TerrainTile terrain = rc.senseTerrainTile(proposedCompanion);
+                        GameObject occupant = rc.senseObjectAtLocation(proposedCompanion);
+                        //Companion must be a barrier
+                        if(terrain == TerrainTile.OFF_MAP || terrain == TerrainTile.VOID || occupant != null) {
+                                //To ensure they are part of the same structure
+                                if(proposedCompanion.isAdjacentTo(companion)) {
+                                        return proposedCompanion;
+                                }
+                        }
+                }
+        }
+        return null;
+}
+}
