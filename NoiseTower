@@ -1,0 +1,43 @@
+package kerry;
+
+import battlecode.common.MapLocation;
+import battlecode.common.RobotController;
+
+public class NoiseTower extends RobotBrain{
+	public NoiseTower(RobotController rc){
+		super(rc);
+	}
+	public void heard(){
+		//we can probably do a lot of busy work here
+		//calculations need to get done and NoiseTowers don't have much else to do
+		while (true) {
+			try {
+				int x, y;
+				MapLocation loc;
+				for (int i = 0; i < 120; i++) {
+					while (!rc.isActive())
+						rc.yield();
+					// we want a spiral with period ~8, starting radius of 22,
+					// loose 1 squares each time?
+					x = (int) (Math.cos(i * Math.PI * 2 / 8)
+							* (20 - i / 8) + rc.getLocation().x);
+					y = (int) (Math.sin(i * Math.PI * 2 / 8)
+							* (20 - i / 8) + rc.getLocation().y);
+					//System.out.println(x+","+y);
+					loc = new MapLocation(x,y);
+					if (rc.canAttackSquare(loc)){
+						rc.attackSquare(loc);
+					}
+					rc.yield();
+				}
+			} catch (Exception e) {
+				//reportError("error with noise tower");
+				System.out.println(e.getMessage());
+				return;
+			}
+		}
+	}
+	public void run(){
+		heard();
+	}
+}
